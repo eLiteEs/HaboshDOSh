@@ -1,23 +1,41 @@
-# Makefile para compilar y ejecutar
+# Configuración
 ASM = nasm
-ASMFLAGS = -f bin
-QEMU = qemu-system-x86_64
+CC = gcc
+LD = ld
+CFLAGS = -m32 -ffreestanding -nostdlib -fno-pie -O0
+LDFLAGS = -m elf_i386 -T kernel/linker.ld
 
-all: bootloader.bin kernel.bin haboshdosh.img
+# Archivos
+BOOT_SRC = boot/boot.asm
+KERNEL_ENTRY_SRC = boot/kernel_entry.asm
+KERNEL_SRC = kernel/kernel.c
+KERNEL_OBJ = build/kernel.o
+KERNEL_ENTRY_OBJ = build/kernel_entry.o
 
-bootloader.bin: bootloader.asm
-	$(ASM) $(ASMFLAGS) $< -o $@
+# Crear directorio build/
+$(shell mkdir -p build)
 
-kernel.bin: kernel.asm
-	$(ASM) $(ASMFLAGS) $< -o $@
+all: os-image
 
-haboshdosh.img: bootloader.bin kernel.bin
-	dd if=/dev/zero of=$@ bs=512 count=2880  # Disco de 1.44MB (floppy)
-	dd if=bootloader.bin of=$@ conv=notrunc
-	dd if=kernel.bin of=$@ seek=1 conv=notrunc  # Kernel en sector 2
+os-image: boot.bin kernel.bin
+	dd if=/dev/zero of=disk.img bs=512 count=2880
+	dd if=boot.bin of=disk.img conv=notrunc
+	dd if=kernel.bin of=disk.img seek=1 conv=notrunc
 
-run: haboshdosh.img
-	$(QEMU) -fda haboshdosh.img
+boot.bin: $(BOOT_SRC)
+	$(ASM) -f bin $< -o $@
+
+kernel.bin: $(KERNEL_ENTRY_OBJ) $(KERNEL_OBJ)
+	$(LD) $(LDFLAGS) $^ -o $@
+
+$(KERNEL_ENTRY_OBJ): $(KERNEL_ENTRY_SRC)
+	$(ASM) -f elf32 $< -o $@
+
+$(KERNEL_OBJ): $(KERNEL_SRC)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+run: os-image
+	qemu-system-x86_64 -fda disk.img
 
 clean:
-	rm -f *.bin *.img
+	rm -rf *.bin *.o *.img build/
