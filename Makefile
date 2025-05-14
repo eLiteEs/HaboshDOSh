@@ -1,41 +1,39 @@
-# Configuración
 ASM = nasm
-CC = gcc
-LD = ld
-CFLAGS = -m32 -ffreestanding -nostdlib -fno-pie -O0
-LDFLAGS = -m elf_i386 -T kernel/linker.ld
+QEMU = qemu-system-x86_64
 
-# Archivos
-BOOT_SRC = boot/boot.asm
-KERNEL_ENTRY_SRC = boot/kernel_entry.asm
-KERNEL_SRC = kernel/kernel.c
-KERNEL_OBJ = build/kernel.o
-KERNEL_ENTRY_OBJ = build/kernel_entry.o
+all: os.img
 
-# Crear directorio build/
-$(shell mkdir -p build)
+os.img: boot.bin kernel.bin
+	# Crear imagen de 1.44MB (2880 sectores)
+	dd if=/dev/zero of=os.img bs=512 count=2880
+	
+	# Escribir bootloader (primer sector)
+	dd if=boot.bin of=os.img conv=notrunc
+	
+	# Escribir kernel (sectores 2-9)
+	dd if=kernel.bin of=os.img bs=512 seek=1 conv=notrunc
+	
+	# Verificar firma de arranque
+	@if ! tail -c 2 os.img | hexdump -v -e '1/1 "%02X "' | grep -q "55 AA"; then \
+		echo "ERROR: Firma de arranque faltante!"; \
+		exit 1; \
+	fi
 
-all: os-image
-
-os-image: boot.bin kernel.bin
-	dd if=/dev/zero of=disk.img bs=512 count=2880
-	dd if=boot.bin of=disk.img conv=notrunc
-	dd if=kernel.bin of=disk.img seek=1 conv=notrunc
-
-boot.bin: $(BOOT_SRC)
+boot.bin: boot/boot.asm
 	$(ASM) -f bin $< -o $@
+	@if [ $$(stat -c%s $@) -ne 512 ]; then \
+		echo "ERROR: boot.bin debe ser exactamente 512 bytes"; \
+		exit 1; \
+	fi
 
-kernel.bin: $(KERNEL_ENTRY_OBJ) $(KERNEL_OBJ)
-	$(LD) $(LDFLAGS) $^ -o $@
-
-$(KERNEL_ENTRY_OBJ): $(KERNEL_ENTRY_SRC)
-	$(ASM) -f elf32 $< -o $@
-
-$(KERNEL_OBJ): $(KERNEL_SRC)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-run: os-image
-	qemu-system-x86_64 -fda disk.img
+kernel.bin: kernel/kernel.asm
+	$(ASM) -f bin $< -o $@
+	@echo "Tamaño del kernel: $$(stat -c%s $@) bytes"
 
 clean:
-	rm -rf *.bin *.o *.img build/
+	rm -f *.bin *.img
+
+run: os.img
+	$(QEMU) -fda os.img -curses -boot order=a
+
+.PHONY: all clean run
