@@ -3,37 +3,37 @@ QEMU = qemu-system-x86_64
 
 all: os.img
 
-os.img: boot.bin kernel.bin
-	# Crear imagen de 1.44MB (2880 sectores)
+os.img: boot.bin kernel.bin babosh/test.bin
 	dd if=/dev/zero of=os.img bs=512 count=2880
-	
-	# Escribir bootloader (primer sector)
 	dd if=boot.bin of=os.img conv=notrunc
-	
-	# Escribir kernel (sectores 2-9)
 	dd if=kernel.bin of=os.img bs=512 seek=1 conv=notrunc
-	
-	# Verificar firma de arranque
-	@if ! tail -c 2 os.img | hexdump -v -e '1/1 "%02X "' | grep -q "55 AA"; then \
-		echo "ERROR: Firma de arranque faltante!"; \
-		exit 1; \
-	fi
+	dd if=babosh/test.bin of=os.img bs=512 seek=10 conv=notrunc
 
 boot.bin: boot/boot.asm
 	$(ASM) -f bin $< -o $@
 	@if [ $$(stat -c%s $@) -ne 512 ]; then \
-		echo "ERROR: boot.bin debe ser exactamente 512 bytes"; \
-		exit 1; \
+		echo "Error: boot.bin debe ser exactamente 512 bytes"; exit 1; \
 	fi
 
 kernel.bin: kernel/kernel.asm
 	$(ASM) -f bin $< -o $@
-	@echo "Tamaño del kernel: $$(stat -c%s $@) bytes"
+	@if [ $$(stat -c%s $@) -ne 4096 ]; then \
+		echo "Error: kernel.bin debe ser exactamente 4096 bytes"; exit 1; \
+	fi
+
+babosh/test.bin: babosh/test.asm
+	$(ASM) -f bin $< -o $@
+	@if [ $$(stat -c%s $@) -ne 2048 ]; then \
+		echo "Error: test.bin debe ser exactamente 2048 bytes"; exit 1; \
+	fi
 
 clean:
-	rm -f *.bin *.img
+	rm -f *.bin *.img babosh/*.bin
 
 run: os.img
-	$(QEMU) -fda os.img -curses -boot order=a
+	$(QEMU) -fda os.img -display curses
 
-.PHONY: all clean run
+debug: os.img
+	$(QEMU) -fda os.img -d int,cpu_reset -D qemu.log
+
+.PHONY: all clean run debug
