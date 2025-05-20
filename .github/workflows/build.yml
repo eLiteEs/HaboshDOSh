@@ -1,0 +1,38 @@
+name: Build HaboshDOSh Image
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install NASM and QEMU
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y nasm
+
+    - name: Build OS image using Makefile
+      run: make
+
+    - name: Verify haboshdosh.img was created
+      run: |
+        if [ ! -f haboshdosh.img ]; then
+          echo "haboshdosh.img not created";
+          exit 1;
+        fi
+        echo "haboshdosh.img created"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: HaboshDOSh
+        path: haboshdosh.img
+
