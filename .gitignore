@@ -1,0 +1,7 @@
+*.img
+*.iso
+*.o
+*.log
+*.lock
+*.bin
+tags

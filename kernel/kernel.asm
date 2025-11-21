@@ -63,6 +63,11 @@ clear_cmd:
     call clear_screen
     ret
 
+unknown_cmd:
+    mov si, unknown_msg
+    call print_string
+    ret
+
 echo_cmd:
     mov si, command_buffer
     add si, 5       ; Saltar "echo "
@@ -141,6 +146,8 @@ cli_main:
     call starts_with
     je .do_echo
 
+    jmp .do_unknown
+
 .do_help:
     call help_cmd
     jmp cli_main
@@ -151,6 +158,10 @@ cli_main:
 
 .do_echo:
     call echo_cmd
+    jmp cli_main
+
+.do_unknown:
+    call unknown_cmd
     jmp cli_main
 
 compare_strings:
@@ -204,7 +215,7 @@ help_msg db "Available commands:", 0x0D, 0x0A
         db "  help   - Show this list", 0x0D, 0x0A
         db "  clear  - Clear screen", 0x0D, 0x0A
         db "  echo   - Show text on the screen", 0x0D, 0x0A, 0
-not_found_msg db "Unknown command", 0x0D, 0x0A, 0
+unknown_msg db "Unknown command", 0x0D, 0x0A, 0
 help_str db "help", 0
 clear_str db "clear", 0
 echo_str db "echo ", 0
